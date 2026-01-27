@@ -434,7 +434,7 @@ if __name__ == "__main__":
     date = "2026" + input("Date (eg. 0126): 2026")
 
     # temp cache for long runs
-    temp_data_folder = Path(r'C:\Users\carol\Github\lick_detection\tmpfile')
+    temp_data_folder = Path(r'C:\Users\carol\Github\lick_detection\tmp')
     temp_data_folder.mkdir(parents=True, exist_ok=True)
     temp_data_file = temp_data_folder / f'{mouse_id}_{date}_temp.pkl'
 
