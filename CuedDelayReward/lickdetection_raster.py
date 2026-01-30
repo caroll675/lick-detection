@@ -353,12 +353,11 @@ def plot_lick_raster(
     fps,
     mouse_id,
     date,
-    fig_root_dir=Path(r"Z:\Carol\LickData")
+    fig_root_dir=Path(r"\\140.247.90.110\homes2\Carol\LickData")
 ):
     """
-    Plots a raster of lick times against trial onset. Expects synced_gpio_file to contain:
+    Plots a raster of lick times per trial type. Expects synced_gpio_file to contain:
     'lickframe' (0/1 per frame), 'trialtype', 'trialstarttime'.
-    Since there's only one trial type, all trials are plotted sequentially.
     """
     df = synced_gpio_file.copy()
     df = df[df['trialtype'] != 'None']
@@ -366,53 +365,71 @@ def plot_lick_raster(
     if 'lickframe' not in df.columns:
         raise ValueError("synced_gpio_file must have a 'lickframe' column (0/1 per frame).")
 
-    # Get all unique trial start times (one trial type only)
-    trial_starts = df['trialstarttime'].unique()
-    
-    # Collect lick events for all trials
-    all_lick_events = []
-    for trial_idx, t_start in enumerate(trial_starts):
-        single_trial = df[df['trialstarttime'] == t_start]
-        lick_frames_in_trial = single_trial.index[single_trial['lickframe'] == 1].to_numpy()
-        if lick_frames_in_trial.size > 0:
-            trial_start_frame = int(single_trial.index.min())
-            rel_times = (lick_frames_in_trial - trial_start_frame) / float(fps)
-            all_lick_events.append(rel_times.tolist())
-        else:
-            all_lick_events.append([])
+    unique_trial_types = sorted(df['trialtype'].unique(), key=lambda v: str(v))
 
-    # Use a single color for all trials (since there's only one trial type)
-    color = np.array([41, 114, 112], dtype=float) / 255.0
-    
-    event_positions = []
-    event_colors = []
-    y_labels = []
-    
-    for trial_idx, lick_times in enumerate(all_lick_events):
-        if lick_times:
-            event_positions.append(list(lick_times))
-            event_colors.append(color)
-            y_labels.append(f"T{trial_idx + 1}")
+    all_lick_events = {}
+    for tt in unique_trial_types:
+        tt_df = df[df['trialtype'] == tt].copy()
+        trial_starts = tt_df['trialstarttime'].unique()
+        all_lick_events[str(tt)] = {}
+        for trial_idx, t_start in enumerate(trial_starts):
+            single_trial = tt_df[tt_df['trialstarttime'] == t_start]
+            lick_frames_in_trial = single_trial.index[single_trial['lickframe'] == 1].to_numpy()
+            if lick_frames_in_trial.size > 0:
+                trial_start_frame = int(single_trial.index.min())
+                rel_times = (lick_frames_in_trial - trial_start_frame) / float(fps)
+                all_lick_events[str(tt)][trial_idx] = rel_times.tolist()
+
+    event_positions, event_colors, y_labels = [], [], []
+    palette = np.array([
+        [41, 114, 112],
+        [230, 109, 80],
+        [231, 198, 107],
+        [138, 176, 124],
+        [41, 157, 143],
+    ], dtype=float) / 255.0
+
+    for i, tt in enumerate(unique_trial_types):
+        trials_for_tt = all_lick_events[str(tt)]
+        color = palette[i % len(palette)]
+        for trial_in_type_idx, lick_times in sorted(trials_for_tt.items()):
+            if lick_times:
+                event_positions.append(list(lick_times))
+                event_colors.append(color)
+                y_labels.append(f"TT{tt} T{trial_in_type_idx + 1}")
 
     y_positions = list(range(len(event_positions)))
 
     plt.figure(figsize=(10, 5))
     if event_positions:
-        plt.eventplot(event_positions, orientation="horizontal", colors=event_colors, linewidths=1)
+        plt.eventplot(event_positions, orientation="horizontal", colors=event_colors)
 
-    plt.xlabel("Time (s) relative to foreperiod")
+    plt.xlabel("Time (s)")
     plt.ylabel("Trial Index")
     plt.title(f"{mouse_id}_{date}")
 
-
-    plt.xlim([-0.5, 5])
-
+    # Reference timings
+    odor_start_time = 1.25
+    odor_end_time = 1.75
     ymin = -0.5
-    ymax = (max(y_positions) + 0.5) if y_positions else 0.5
-    plt.vlines(0.5, ymin, ymax, color='black', linestyle='-', linewidth=2, alpha=0.7, label='water')
-    plt.legend()
+    ymax = (max(y_positions) - 0.5) if y_positions else 0.5
 
-    plt.grid(True, axis='x', linestyle='--', alpha=0.5)
+    vline_times = [odor_start_time, odor_end_time,
+                   odor_end_time + 0.25, odor_end_time + 1,
+                   odor_end_time + 2.5, odor_end_time + 5.5]
+    for t_v in vline_times:
+        plt.vlines(t_v, ymin, ymax, color='purple', linestyle='-', linewidth=1, alpha=0.7)
+    plt.axvspan(odor_start_time, odor_end_time, ymin=0, ymax=1, facecolor='purple', alpha=0.1)
+
+    x_ticks_labels = ['odor', '0.75', '1.5', '3', '6']
+    x_tick_positions = [odor_start_time,
+                        odor_end_time + 0.25,
+                        odor_end_time + 1,
+                        odor_end_time + 2.5,
+                        odor_end_time + 5.5]
+    plt.xlim([0, 15])
+    plt.xticks(x_tick_positions, x_ticks_labels)
+    plt.grid(True, axis='x', linestyle='--')
     plt.gca().invert_yaxis()
 
     fig_root_dir = Path(fig_root_dir)
@@ -428,7 +445,7 @@ def plot_lick_raster(
 # Main
 # ----------------------------
 if __name__ == "__main__":
-    protocol = 'WaterDelivery'
+    protocol = 'CombinedStimOdorTask'
     print('protocol: ' + protocol)
     mouse_id = "CC" + input("MouseID: CC")
     date = "2026" + input("Date (eg. 0126): 2026")
@@ -457,7 +474,7 @@ if __name__ == "__main__":
         lick_frames_array = temp_data.get('lick_frames_array')
         start_frame_for_playback = temp_data.get('start_frame_for_playback', 0)
     else:
-        root_bpod_dir  = Path(r"Z:\Carol\BpodData")
+        root_bpod_dir  = Path(r"\\140.247.90.110\homes2\Carol\BpodData")
         session_dir    = root_bpod_dir / mouse_id / protocol / "Session Data"
         pattern        = f"{mouse_id}_{protocol}_{date}_*.mat"
         matches        = list(session_dir.glob(pattern))
@@ -466,7 +483,7 @@ if __name__ == "__main__":
             print("No session file found")
             sys.exit(1)
 
-        root_video_dir = Path(r"Z:\Carol\VideoData10s")
+        root_video_dir = Path(r"\\140.247.90.110\homes2\Carol\VideoData10s")
 
         # Safe 'next' with default None
         video_path = next((p for p in root_video_dir.glob(f"{mouse_id}_{date}_*_cam1.avi")), None)
