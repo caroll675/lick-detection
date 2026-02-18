@@ -92,8 +92,8 @@ def select_roi(
 def detect_licks(
     video_path,
     roi,
-    threshold=30,
-    min_movement_percent=25,
+    threshold=15,
+    min_movement_percent=30,
     cooldown_frames=2,
     show_video_with_licks=False,
     playback_speed=0.5,
